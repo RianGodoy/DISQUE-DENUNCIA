@@ -370,6 +370,54 @@ begin
 end;
 $$;
 
+-- Encerra o vínculo com uma empresa: o link para de abrir e ninguém mais
+-- consegue denunciar por ele. As denúncias já recebidas continuam no painel
+-- (o prazo de guarda vale mesmo depois do fim do contrato). Por padrão também
+-- desativa os membros da comissão ligados só a ela.
+create or replace function public.canal_encerrar_empresa(p_empresa uuid, p_motivo text, p_desativar_membros boolean default true)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_membros int := 0;
+begin
+  if not canal_eh_admin() then
+    raise exception 'Só o administrador encerra o vínculo com uma empresa.' using errcode = '42501';
+  end if;
+  if length(trim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'Informe o motivo do encerramento.' using errcode = 'P0001';
+  end if;
+  if not exists (select 1 from empresas where id = p_empresa and ativa) then
+    raise exception 'Empresa não encontrada ou com vínculo já encerrado.' using errcode = 'P0001';
+  end if;
+  if coalesce(p_desativar_membros, true) then
+    update comissao_membros set ativo = false where empresa_id = p_empresa and ativo;
+    get diagnostics v_membros = row_count;
+  end if;
+  perform set_config('canal.motivo', trim(p_motivo), true);
+  perform set_config('canal.membros_desativados', v_membros::text, true);
+  update empresas set ativa = false where id = p_empresa;
+  return jsonb_build_object('membros_desativados', v_membros);
+end;
+$$;
+
+-- Reativa o vínculo: o link volta a abrir. Os membros desativados no
+-- encerramento NÃO voltam sozinhos — o administrador reativa em Membros.
+create or replace function public.canal_reativar_empresa(p_empresa uuid, p_motivo text)
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if not canal_eh_admin() then
+    raise exception 'Só o administrador reativa o vínculo com uma empresa.' using errcode = '42501';
+  end if;
+  if length(trim(coalesce(p_motivo, ''))) < 3 then
+    raise exception 'Informe o motivo da reativação.' using errcode = 'P0001';
+  end if;
+  if not exists (select 1 from empresas where id = p_empresa and not ativa) then
+    raise exception 'Empresa não encontrada ou com vínculo já ativo.' using errcode = 'P0001';
+  end if;
+  perform set_config('canal.motivo', trim(p_motivo), true);
+  perform set_config('canal.membros_desativados', '', true);
+  update empresas set ativa = true where id = p_empresa;
+end;
+$$;
+
 -- LGPD — minimização: apaga a identificação e os nomes citados das denúncias
 -- encerradas há mais de N anos, mantendo o que serve de estatística
 -- (categoria, unidade, datas, resultado). Os arquivos anexos precisam ser
@@ -622,6 +670,8 @@ grant execute on function public.canal_declarar_impedimento(uuid, text)         
 grant execute on function public.canal_afastar_membro(uuid, uuid, text)                to authenticated;
 grant execute on function public.canal_adicionar_membro(text, text, text, uuid)        to authenticated;
 grant execute on function public.canal_expurgar(int)                                   to authenticated;
+grant execute on function public.canal_encerrar_empresa(uuid, text, boolean)            to authenticated;
+grant execute on function public.canal_reativar_empresa(uuid, text)                     to authenticated;
 
 -- -----------------------------------------------------------------------------
 -- Armazenamento dos anexos

@@ -320,6 +320,34 @@ ok(!!x.e, 'link da empresa só aceita letras minúsculas, números e hífen')
 x = await tenta(() => como('authenticated', ids[admin], () => db.query(`delete from empresas where slug = 'nova-empresa'`)))
 ok(!!x.e || (await db.query(`select 1 from empresas where slug = 'nova-empresa'`)).rows.length === 1, 'empresa não se apaga (só desativa)')
 
+// ------------------------------------------------------ encerrar vínculo
+x = await tenta(() => como('authenticated', ids[admin], () => db.query(`update empresas set ativa = false where id = $1`, [emp['empresa-b']])))
+ok(/motivo é obrigatório/.test(x.e || ''), 'não se desliga empresa por fora, sem motivo')
+x = await tenta(() => como('authenticated', ids[membro], () => db.query(`select canal_encerrar_empresa($1, 'contrato encerrado')`, [emp['empresa-b']])))
+ok(!!x.e, 'membro comum não encerra vínculo')
+x = await tenta(() => como('authenticated', ids[admin], () => db.query(`select canal_encerrar_empresa($1, '')`, [emp['empresa-b']])))
+ok(/motivo/.test(x.e || ''), 'encerrar exige motivo')
+const denB = (await db.query(`select count(*)::int n from denuncias where empresa_id = $1`, [emp['empresa-b']])).rows[0].n
+const enc = await como('authenticated', ids[admin], () => db.query(`select canal_encerrar_empresa($1, 'Fim do contrato em setembro') r`, [emp['empresa-b']]))
+const eb = (await db.query(`select ativa, encerrada_em from empresas where id = $1`, [emp['empresa-b']])).rows[0]
+ok(!eb.ativa && eb.encerrada_em !== null && enc.rows[0].r.membros_desativados === 1, 'encerrar desativa a empresa, anota a data e desativa o membro dela')
+ok(!(await db.query(`select ativo from comissao_membros where user_id = $1`, [ids[membroB]])).rows[0].ativo, 'membro da empresa encerrada perde o acesso')
+ep = await como('anon', null, () => db.query(`select canal_empresa_publica('empresa-b') r`))
+ok(ep.rows[0].r === null, 'o link da empresa encerrada para de abrir')
+ok((await como('authenticated', ids[admin], () => db.query(`select count(*)::int n from denuncias where empresa_id = $1`, [emp['empresa-b']]))).rows[0].n === denB,
+  'as denúncias da empresa encerrada continuam no painel')
+let hist = (await db.query(`select detalhe from denuncia_historico where acao = 'empresa_encerrada'`)).rows
+ok(hist.length === 1 && hist[0].detalhe.motivo === 'Fim do contrato em setembro' && hist[0].detalhe.membros_desativados === 1, 'histórico guarda o encerramento com motivo')
+x = await tenta(() => como('authenticated', ids[admin], () => db.query(`select canal_reativar_empresa($1, 'x')`, [emp['empresa-b']])))
+ok(/motivo/.test(x.e || ''), 'reativar exige motivo')
+await como('authenticated', ids[admin], () => db.query(`select canal_reativar_empresa($1, 'Contrato renovado')`, [emp['empresa-b']]))
+const eb2 = (await db.query(`select ativa, encerrada_em from empresas where id = $1`, [emp['empresa-b']])).rows[0]
+hist = (await db.query(`select detalhe from denuncia_historico where acao = 'empresa_reativada'`)).rows
+ok(eb2.ativa && eb2.encerrada_em === null && hist[0]?.detalhe.motivo === 'Contrato renovado', 'reativar volta o link e fica no histórico')
+ok(!(await db.query(`select ativo from comissao_membros where user_id = $1`, [ids[membroB]])).rows[0].ativo, 'membro não volta sozinho na reativação')
+await como('authenticated', ids[admin], () => db.query(`update empresas set nome = 'Empresa B Ltda' where id = $1`, [emp['empresa-b']]))
+ok((await db.query(`select 1 from denuncia_historico where acao = 'empresa_update' and detalhe->'antes'->>'nome' = 'Empresa B & Cia'`)).rows.length === 1, 'mudança de nome fica no histórico com o nome anterior')
+
 // rate limit
 const ja = (await db.query(`select count(*)::int n from denuncias where criada_em > now() - interval '10 minutes'`)).rows[0].n
 for (let i = 0; i < 30 - ja; i++) await db.query(`select canal_registrar_denuncia($1::jsonb)`, [JSON.stringify({ empresa: 'empresa-a',  categoria: 'outro', descricao: 'teste de volume de envios ' + i })])
@@ -330,7 +358,7 @@ ok(/muitos envios/.test(x.e || ''), 'freio de 30 envios por 10 minutos')
 const conferencia = (await db.query(readFileSync(new URL('../supabase/conferir-instalacao.sql', import.meta.url), 'utf8'))).rows
 const falta = conferencia.filter((r) => r.situacao !== '✔').map((r) => r.item)
 // neste banco de teste não há pg_net de verdade nem site publicado
-ok(conferencia.length === 11 && JSON.stringify(falta) === JSON.stringify(['Extensão pg_net (envio do e-mail)', 'Endereço do site (botão do e-mail)']),
+ok(conferencia.length === 12 && JSON.stringify(falta) === JSON.stringify(['Extensão pg_net (envio do e-mail)', 'Endereço do site (botão do e-mail)']),
   `conferir-instalacao.sql funciona (faltando aqui, como esperado: ${falta.join(', ')})`)
 
 console.log(falhas ? `\n${falhas} FALHA(S)` : '\nTudo certo.')

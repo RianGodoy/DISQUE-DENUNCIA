@@ -6,7 +6,8 @@ import { Barras, contar, percentuais } from '../../componentes/Graficos'
 import { api } from '../../lib/api'
 import { useComissao } from '../../lib/contextoComissao'
 import { SLUG_VALIDO, linkDaEmpresa, paraSlug } from '../../lib/contextoEmpresa'
-import { STATUS, estaAberta, mensagemDeErro, rotuloStatus } from '../../lib/formato'
+import { ACOES, STATUS, data, dataHora, estaAberta, mensagemDeErro, rotuloStatus } from '../../lib/formato'
+import { autorDaLinha, descreverDetalhe } from '../../lib/trilha'
 import { useCopiar, useTitulo } from '../../lib/ganchos'
 
 /* Empresas atendidas pelo canal.
@@ -47,12 +48,14 @@ export default function Empresas() {
               {e.nome}
             </button>
           ))}
+          {admin && <button className={atual === 'historico' ? 'ativo' : ''} onClick={() => setAba('historico')}>Histórico</button>}
           {admin && <button className={atual === 'nova' ? 'ativo' : ''} onClick={() => setAba('nova')}>+ Nova empresa</button>}
         </nav>
       )}
 
       {atual === 'geral' && <VisaoGeral lista={lista} aoAbrir={setAba} />}
       {atual === 'nova' && admin && <FormEmpresa aoSalvar={(e) => setAba(e.id)} />}
+      {atual === 'historico' && admin && <HistoricoEmpresas />}
       {empresa && <PainelEmpresa key={empresa.id} empresa={empresa} lista={lista} />}
     </>
   )
@@ -101,7 +104,7 @@ function VisaoGeral({ lista, aoAbrir }) {
               <tbody>
                 {porEmpresa.map((e, i) => (
                   <tr key={e.id} className="clicavel" onClick={() => aoAbrir(e.id)}>
-                    <td>{e.nome}{!e.ativa && <> <Selo>desativada</Selo></>}</td>
+                    <td>{e.nome}{!e.ativa && <> <Selo>vínculo encerrado</Selo></>}</td>
                     <td className="num">{e.total}</td>
                     <td className="num">{pcts[i]}%</td>
                     <td className="num">{e.abertas}</td>
@@ -125,6 +128,8 @@ function PainelEmpresa({ empresa, lista }) {
   const veTodas = !membro.empresa_id
   const [copiado, copiar] = useCopiar()
   const [editando, setEditando] = useState(false)
+  const [vinculo, setVinculo] = useState(false)
+  const [versaoHist, setVersaoHist] = useState(0)
   const link = linkDaEmpresa(empresa.slug)
   const doCanal = lista.length
   const den = useMemo(() => lista.filter((d) => d.empresa_id === empresa.id), [lista, empresa.id])
@@ -137,17 +142,35 @@ function PainelEmpresa({ empresa, lista }) {
       <div className="cartao">
         <div className="cartao-cabeca">
           <h2>{empresa.nome}</h2>
-          {empresa.ativa ? <Selo tom="ok" ponto>Recebendo denúncias</Selo> : <Selo ponto>Desativada — o link não abre</Selo>}
+          {empresa.ativa ? <Selo tom="ok" ponto>Vínculo ativo — recebendo denúncias</Selo> : <Selo ponto>Vínculo encerrado</Selo>}
         </div>
+        {!empresa.ativa && (
+          <div style={{ marginBottom: 14 }}>
+            <Aviso tipo="alerta" titulo={`Vínculo encerrado${empresa.encerrada_em ? ` em ${data(empresa.encerrada_em)}` : ''}.`}>
+              O link não abre mais e ninguém consegue denunciar por ele. As {den.length} denúncia(s) desta empresa
+              continuam no painel até o prazo de guarda.
+            </Aviso>
+          </div>
+        )}
         <label className="rotulo" htmlFor={`link-${empresa.id}`}>Link para divulgar</label>
         <div className="link-caixa" style={{ marginTop: 6 }}>
           <input id={`link-${empresa.id}`} type="text" readOnly value={link} onFocus={(e) => e.target.select()} />
           <button className="btn btn-secundario btn-pequeno" onClick={() => copiar(link)}>{copiado ? 'Copiado ✓' : 'Copiar'}</button>
           <Link className="btn btn-secundario btn-pequeno" to={`/e/${empresa.slug}`} target="_blank" rel="noreferrer">Abrir</Link>
           <Link className="btn btn-secundario btn-pequeno" to={`/cartaz/${empresa.slug}`}>Cartaz com QR code</Link>
-          {admin && <button className="btn btn-fantasma btn-pequeno" onClick={() => setEditando(!editando)}>{editando ? 'Fechar edição' : 'Editar empresa'}</button>}
+          {admin && <button className="btn btn-fantasma btn-pequeno" onClick={() => { setEditando(!editando); setVinculo(false) }}>{editando ? 'Fechar edição' : 'Editar empresa'}</button>}
+          {admin && (
+            <button className={`btn btn-pequeno ${empresa.ativa ? 'btn-perigo' : 'btn-secundario'}`} onClick={() => { setVinculo(!vinculo); setEditando(false) }}>
+              {vinculo ? 'Cancelar' : empresa.ativa ? 'Encerrar vínculo' : 'Reativar vínculo'}
+            </button>
+          )}
         </div>
         {editando && <div style={{ marginTop: 18 }}><FormEmpresa empresa={empresa} aoSalvar={() => setEditando(false)} /></div>}
+        {vinculo && (
+          <div style={{ marginTop: 18 }}>
+            <FormVinculo empresa={empresa} abertas={den.filter(estaAberta).length} aoConcluir={() => { setVinculo(false); setVersaoHist((v) => v + 1) }} />
+          </div>
+        )}
       </div>
 
       <div className="kpis" style={{ marginTop: 16 }}>
@@ -184,6 +207,12 @@ function PainelEmpresa({ empresa, lista }) {
           </div>
         </>
       )}
+      {admin && (
+        <div className="cartao" style={{ marginTop: 16 }}>
+          <h2>Histórico do vínculo</h2>
+          <HistoricoEmpresas empresaId={empresa.id} slug={empresa.slug} versao={versaoHist} />
+        </div>
+      )}
     </>
   )
 }
@@ -196,7 +225,6 @@ function FormEmpresa({ empresa, aoSalvar }) {
   const [slug, setSlug] = useState(empresa?.slug || '')
   const [slugManual, setSlugManual] = useState(!nova)
   const [unidades, setUnidades] = useState((empresa?.unidades?.length ? empresa.unidades : unidadesPadrao).join('\n'))
-  const [ativa, setAtiva] = useState(empresa?.ativa ?? true)
   const [salvando, setSalvando] = useState(false)
   const [erro, setErro] = useState('')
   const slugFinal = slugManual ? slug : paraSlug(nome)
@@ -210,7 +238,7 @@ function FormEmpresa({ empresa, aoSalvar }) {
     setSalvando(true)
     try {
       const salva = await api.salvarEmpresa({
-        id: empresa?.id, nome, slug: slugFinal, unidades: unidades.split('\n'), ativa,
+        id: empresa?.id, nome, slug: slugFinal, unidades: unidades.split('\n'),
       })
       await recarregarEmpresas()
       aoSalvar(salva)
@@ -240,14 +268,120 @@ function FormEmpresa({ empresa, aoSalvar }) {
         <label htmlFor="emp-unidades">Unidades <span className="opcional">(uma por linha — aparecem no formulário de denúncia)</span></label>
         <textarea id="emp-unidades" rows={4} style={{ minHeight: 96 }} value={unidades} onChange={(e) => setUnidades(e.target.value)} />
       </div>
-      {!nova && (
-        <label className="caixa" style={{ marginBottom: 16 }}>
-          <input type="checkbox" checked={ativa} onChange={(e) => setAtiva(e.target.checked)} />
-          <span>Recebendo denúncias <span className="fraco">— desmarcado, o link para de abrir. As denúncias já recebidas continuam no painel.</span></span>
-        </label>
-      )}
       {erro && <div style={{ marginBottom: 12 }}><Aviso tipo="erro">{erro}</Aviso></div>}
       <button className="btn btn-primario" disabled={salvando}>{salvando ? 'Salvando…' : nova ? 'Criar empresa e gerar link' : 'Salvar alterações'}</button>
     </form>
+  )
+}
+
+/* ------------------------------------------------ encerrar / reativar vínculo */
+function FormVinculo({ empresa, abertas, aoConcluir }) {
+  const { membros, recarregarEmpresas, recarregarMembros } = useComissao()
+  const encerrar = empresa.ativa
+  const daEmpresa = membros.filter((m) => m.empresa_id === empresa.id && m.ativo)
+  const [motivo, setMotivo] = useState('')
+  const [desativar, setDesativar] = useState(true)
+  const [enviando, setEnviando] = useState(false)
+  const [erro, setErro] = useState('')
+
+  async function confirmar(e) {
+    e.preventDefault()
+    setErro('')
+    if (motivo.trim().length < 3) return setErro('Escreva o motivo — ele fica no histórico.')
+    if (encerrar && !window.confirm(`Encerrar o vínculo com ${empresa.nome}? O link para de abrir na hora.`)) return
+    setEnviando(true)
+    try {
+      if (encerrar) await api.encerrarEmpresa(empresa.id, motivo.trim(), desativar)
+      else await api.reativarEmpresa(empresa.id, motivo.trim())
+      await Promise.all([recarregarEmpresas(), recarregarMembros()])
+      aoConcluir()
+    } catch (e2) {
+      setErro(mensagemDeErro(e2))
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <form onSubmit={confirmar} style={{ borderTop: '1px solid var(--borda)', paddingTop: 16 }}>
+      <h3>{encerrar ? 'Encerrar vínculo' : 'Reativar vínculo'} com {empresa.nome}</h3>
+      {encerrar ? (
+        <ul className="fraco" style={{ marginBottom: 12 }}>
+          <li>O link e o QR code param de abrir na hora; ninguém mais denuncia por eles.</li>
+          <li>As denúncias já recebidas continuam no painel{abertas ? <> — <strong>{abertas} ainda aberta(s)</strong>, que a comissão deve concluir</> : ''}.</li>
+          <li>Dá para reativar depois; tudo fica no histórico.</li>
+        </ul>
+      ) : (
+        <p className="fraco">O link volta a abrir. Membros desativados no encerramento não voltam sozinhos: reative em Membros.</p>
+      )}
+      <div className="campo">
+        <label htmlFor={`motivo-${empresa.id}`}>Motivo</label>
+        <textarea id={`motivo-${empresa.id}`} rows={2} style={{ minHeight: 64 }} value={motivo} onChange={(e) => setMotivo(e.target.value)}
+          placeholder={encerrar ? 'Ex.: fim do contrato em 30/09/2026' : 'Ex.: contrato renovado'} maxLength={500} />
+      </div>
+      {encerrar && daEmpresa.length > 0 && (
+        <label className="caixa" style={{ marginBottom: 14 }}>
+          <input type="checkbox" checked={desativar} onChange={(e) => setDesativar(e.target.checked)} />
+          <span>Desativar também os {daEmpresa.length} membro(s) da comissão ligados só a esta empresa ({daEmpresa.map((m) => m.nome).join(', ')})</span>
+        </label>
+      )}
+      {erro && <div style={{ marginBottom: 12 }}><Aviso tipo="erro">{erro}</Aviso></div>}
+      <button className={`btn ${encerrar ? 'btn-perigo' : 'btn-primario'}`} disabled={enviando}>
+        {enviando ? 'Salvando…' : encerrar ? 'Encerrar vínculo' : 'Reativar vínculo'}
+      </button>
+    </form>
+  )
+}
+
+/* ------------------------------------------------------------- histórico */
+/** Cadastro, encerramento, reativação e mudanças das empresas. Sem `empresaId`
+    mostra todas (mini-aba "Histórico"); com, só as daquela empresa. */
+function HistoricoEmpresas({ empresaId, slug, versao = 0 }) {
+  const { empresas, nomeDe } = useComissao()
+  const [linhas, setLinhas] = useState(null)
+  const [erro, setErro] = useState('')
+  const [filtro, setFiltro] = useState('')
+
+  useEffect(() => {
+    api.historicoEmpresas().then(setLinhas).catch((e) => setErro(mensagemDeErro(e)))
+  }, [versao, empresas])
+
+  if (erro) return <Aviso tipo="erro">{erro}</Aviso>
+  if (!linhas) return <Carregando />
+
+  // registros antigos não têm empresa_id: aí o slug identifica
+  const daEmpresa = (h, id, s) => h.detalhe?.empresa_id === id || (!h.detalhe?.empresa_id && h.detalhe?.slug === s)
+  const alvo = empresaId ? { id: empresaId, slug } : empresas.find((e) => e.id === filtro)
+  const visiveis = alvo ? linhas.filter((h) => daEmpresa(h, alvo.id, alvo.slug)) : linhas
+
+  return (
+    <>
+      {!empresaId && (
+        <div className="filtros" style={{ gridTemplateColumns: 'minmax(0, 320px)' }}>
+          <select value={filtro} onChange={(e) => setFiltro(e.target.value)} aria-label="Empresa">
+            <option value="">Todas as empresas</option>
+            {empresas.map((e) => <option key={e.id} value={e.id}>{e.nome}</option>)}
+          </select>
+        </div>
+      )}
+      {visiveis.length === 0 ? <div className="vazio">Nenhum registro.</div> : (
+        <div className="tabela-rolagem">
+          <table className="tabela">
+            <thead><tr><th>Quando</th>{!empresaId && <th>Empresa</th>}<th>O quê</th><th>Quem</th><th>Detalhe</th></tr></thead>
+            <tbody>
+              {visiveis.map((h) => (
+                <tr key={h.id}>
+                  <td className="nowrap">{dataHora(h.criado_em)}</td>
+                  {!empresaId && <td>{h.detalhe?.nome || '—'}</td>}
+                  <td>{ACOES[h.acao] || h.acao}</td>
+                  <td>{autorDaLinha(h, nomeDe)}</td>
+                  <td className="fraco">{descreverDetalhe(h, nomeDe)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </>
   )
 }

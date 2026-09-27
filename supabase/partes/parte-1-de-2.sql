@@ -78,6 +78,8 @@ create table if not exists public.empresas (
   ativa      boolean not null default true,
   criada_em  timestamptz not null default now()
 );
+-- quando o vínculo foi encerrado (vazio enquanto a empresa está ativa)
+alter table public.empresas add column if not exists encerrada_em timestamptz;
 
 -- -----------------------------------------------------------------------------
 -- Comissão
@@ -497,12 +499,47 @@ drop trigger if exists medidas_antes_de_alterar on public.denuncia_medidas;
 create trigger medidas_antes_de_alterar before update on public.denuncia_medidas
   for each row execute function public.denuncia_medidas_antes_de_alterar();
 
--- Registra na trilha geral o cadastro e as mudanças de empresas.
+-- Encerrar ou reativar o vínculo com uma empresa só pelas funções
+-- canal_encerrar_empresa / canal_reativar_empresa, que exigem o motivo — o
+-- motivo chega aqui por `canal.motivo`. Um UPDATE direto em `ativa` é recusado,
+-- para o histórico nunca ter encerramento sem explicação.
+create or replace function public.empresas_antes_de_alterar()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.ativa is distinct from old.ativa then
+    if coalesce(current_setting('canal.motivo', true), '') = '' then
+      raise exception 'Use "Encerrar vínculo" ou "Reativar vínculo": o motivo é obrigatório.' using errcode = 'P0001';
+    end if;
+    new.encerrada_em := case when new.ativa then null else now() end;
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists empresas_antes_de_alterar on public.empresas;
+create trigger empresas_antes_de_alterar before update on public.empresas
+  for each row execute function public.empresas_antes_de_alterar();
+
+-- Registra na trilha geral o cadastro, o encerramento, a reativação e as
+-- mudanças de dados das empresas (é o que a mini-aba "Histórico" mostra).
 create or replace function public.empresas_registrar()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  perform canal_registrar(null, 'empresa_' || lower(tg_op),
-    jsonb_build_object('nome', new.nome, 'slug', new.slug, 'ativa', new.ativa));
+  if tg_op = 'INSERT' then
+    perform canal_registrar(null, 'empresa_insert',
+      jsonb_build_object('empresa_id', new.id, 'nome', new.nome, 'slug', new.slug, 'ativa', new.ativa));
+    return new;
+  end if;
+  if new.ativa is distinct from old.ativa then
+    perform canal_registrar(null, case when new.ativa then 'empresa_reativada' else 'empresa_encerrada' end,
+      jsonb_build_object('empresa_id', new.id, 'nome', new.nome, 'slug', new.slug,
+        'motivo', nullif(current_setting('canal.motivo', true), ''),
+        'membros_desativados', nullif(current_setting('canal.membros_desativados', true), '')::int));
+  end if;
+  if (new.nome, new.slug, new.unidades) is distinct from (old.nome, old.slug, old.unidades) then
+    perform canal_registrar(null, 'empresa_update',
+      jsonb_build_object('empresa_id', new.id, 'nome', new.nome, 'slug', new.slug, 'ativa', new.ativa,
+        'antes', jsonb_build_object('nome', old.nome, 'slug', old.slug)));
+  end if;
   return new;
 end;
 $$;

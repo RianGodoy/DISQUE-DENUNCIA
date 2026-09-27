@@ -29,6 +29,14 @@ export function descreverDetalhe(h, nomeDe) {
   if (h.acao === 'recebida') return det.impedidos ? `${det.impedidos} membro(s) afastado(s) pelo denunciante` : ''
   if (h.acao === 'anexo_denunciante') return det.nome || ''
   if (h.acao?.startsWith('membro_')) return `${det.nome || ''} (${det.papel === 'admin' ? 'administrador' : 'membro'}${det.empresa ? ` · ${det.empresa}` : ''}${det.ativo === false ? ', inativo' : ''})`
+  if (h.acao === 'empresa_encerrada') {
+    const m = det.membros_desativados
+    return `${det.nome || ''} — motivo: ${det.motivo || '—'}${m ? ` · ${m} membro(s) desativado(s)` : ''}`
+  }
+  if (h.acao === 'empresa_reativada') return `${det.nome || ''} — motivo: ${det.motivo || '—'}`
+  if (h.acao === 'empresa_update' && det.antes && (det.antes.nome !== det.nome || det.antes.slug !== det.slug)) {
+    return `${det.antes.nome} → ${det.nome}${det.antes.slug !== det.slug ? ` · link /e/${det.antes.slug} → /e/${det.slug}` : ''}`
+  }
   if (h.acao?.startsWith('empresa_')) return `${det.nome || ''} — link /e/${det.slug || ''}${det.ativa === false ? ' (desativada)' : ''}`
   if (h.acao === 'aviso_email') return `${det.destinos} destinatário(s)${det.simulado ? ' — simulado na demonstração, nada foi enviado' : ''}`
   if (h.acao === 'aviso_email_falhou') return det.motivo || ''

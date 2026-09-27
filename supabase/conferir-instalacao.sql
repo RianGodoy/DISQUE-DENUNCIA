@@ -35,6 +35,9 @@ from (values
                where table_schema = 'public' and table_name = 'denuncias'
                  and column_name = 'empresa_id' and is_nullable = 'NO'),
       'O schema rodado é anterior às várias empresas. Rode as partes 1 e 2 atuais.'),
+  (12, 'Encerramento de vínculo com empresa (com histórico)',
+      exists (select 1 from pg_proc where proname = 'canal_encerrar_empresa'),
+      'O schema rodado é anterior ao encerramento de vínculo. Rode as partes 1 e 2 atuais.'),
   (7, 'Empresa ativa cadastrada',
       exists (select 1 from public.empresas where ativa),
       'Painel > Empresas > Nova empresa. Sem empresa ativa, ninguém consegue denunciar.'),

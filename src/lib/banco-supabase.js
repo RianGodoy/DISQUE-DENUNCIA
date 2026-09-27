@@ -188,8 +188,9 @@ export async function listarEmpresas() {
   return exigir(await comissao.from('empresas').select('*').order('nome'))
 }
 
-export async function salvarEmpresa({ id, nome, slug, unidades, ativa = true }) {
-  const dados = { nome: nome.trim(), slug, unidades: (unidades || []).map((u) => u.trim()).filter(Boolean), ativa }
+export async function salvarEmpresa({ id, nome, slug, unidades }) {
+  // `ativa` não vai aqui: encerrar e reativar têm função própria, com motivo
+  const dados = { nome: nome.trim(), slug, unidades: (unidades || []).map((u) => u.trim()).filter(Boolean) }
   return id
     ? exigir(await comissao.from('empresas').update(dados).eq('id', id).select().single())
     : exigir(await comissao.from('empresas').insert(dados).select().single())
@@ -232,6 +233,22 @@ export async function removerAviso(email) {
 
 export async function salvarSiteUrl(url) {
   exigir(await comissao.from('canal_config').upsert({ chave: 'site_url', valor: url.trim().replace(/\/+$/, '') }))
+}
+
+export async function encerrarEmpresa(id, motivo, desativarMembros = true) {
+  return exigir(await comissao.rpc('canal_encerrar_empresa', {
+    p_empresa: id, p_motivo: motivo, p_desativar_membros: desativarMembros,
+  }))
+}
+
+export async function reativarEmpresa(id, motivo) {
+  exigir(await comissao.rpc('canal_reativar_empresa', { p_empresa: id, p_motivo: motivo }))
+}
+
+/** Cadastro, encerramento, reativação e mudanças das empresas (só o admin lê). */
+export async function historicoEmpresas() {
+  return exigir(await comissao.from('denuncia_historico').select('*').is('denuncia_id', null)
+    .in('acao', ['empresa_insert', 'empresa_update', 'empresa_encerrada', 'empresa_reativada']).order('criado_em', { ascending: false }).limit(500))
 }
 
 // Só existem no modo demonstração; aqui não fazem nada.

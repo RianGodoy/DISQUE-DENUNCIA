@@ -556,7 +556,7 @@ export async function listarEmpresas() {
   return db.empresas.filter((e) => veEmpresa(eu, e.id)).sort((a, b) => a.nome.localeCompare(b.nome))
 }
 
-export async function salvarEmpresa({ id, nome, slug, unidades: listaUnidades, ativa = true }) {
+export async function salvarEmpresa({ id, nome, slug, unidades: listaUnidades }) {
   const db = ler()
   const uid = exigirAdmin(db)
   const n = String(nome || '').trim()
@@ -565,11 +565,16 @@ export async function salvarEmpresa({ id, nome, slug, unidades: listaUnidades, a
     throw new Error('Link inválido: use só letras minúsculas, números e hífen.')
   }
   if (db.empresas.some((e) => e.slug === slug && e.id !== id)) throw new Error('Já existe uma empresa com esse link.')
-  const dados = { nome: n, slug, unidades: (listaUnidades || []).map((u) => u.trim()).filter(Boolean), ativa }
+  const dados = { nome: n, slug, unidades: (listaUnidades || []).map((u) => u.trim()).filter(Boolean) }
   let e = db.empresas.find((x) => x.id === id)
-  if (e) Object.assign(e, dados)
-  else db.empresas.push((e = { id: `demo-${uuid().slice(0, 8)}`, ...dados, criada_em: agora() }))
-  registrar(db, null, uid, id ? 'empresa_update' : 'empresa_insert', { nome: e.nome, slug: e.slug, ativa: e.ativa })
+  if (e) {
+    const antes = { nome: e.nome, slug: e.slug }
+    Object.assign(e, dados)
+    registrar(db, null, uid, 'empresa_update', { empresa_id: e.id, nome: e.nome, slug: e.slug, ativa: e.ativa, antes })
+  } else {
+    db.empresas.push((e = { id: `demo-${uuid().slice(0, 8)}`, ...dados, ativa: true, criada_em: agora() }))
+    registrar(db, null, uid, 'empresa_insert', { empresa_id: e.id, nome: e.nome, slug: e.slug, ativa: true })
+  }
   gravar(db)
   return e
 }
@@ -638,6 +643,41 @@ export async function salvarSiteUrl(url) {
   exigirAdmin(db)
   db.siteUrl = String(url || '').trim().replace(/\/+$/, '')
   gravar(db)
+}
+
+export async function encerrarEmpresa(id, motivo, desativarMembros = true) {
+  const db = ler()
+  const uid = exigirAdmin(db)
+  if (String(motivo || '').trim().length < 3) throw new Error('Informe o motivo do encerramento.')
+  const e = db.empresas.find((x) => x.id === id && x.ativa)
+  if (!e) throw new Error('Empresa não encontrada ou com vínculo já encerrado.')
+  let membrosDesativados = 0
+  if (desativarMembros) {
+    for (const m of db.membros) if (m.empresa_id === id && m.ativo) { m.ativo = false; membrosDesativados++ }
+  }
+  e.ativa = false
+  e.encerrada_em = agora()
+  registrar(db, null, uid, 'empresa_encerrada', { empresa_id: id, nome: e.nome, slug: e.slug, motivo: motivo.trim(), membros_desativados: membrosDesativados })
+  gravar(db)
+  return { membros_desativados: membrosDesativados }
+}
+
+export async function reativarEmpresa(id, motivo) {
+  const db = ler()
+  const uid = exigirAdmin(db)
+  if (String(motivo || '').trim().length < 3) throw new Error('Informe o motivo da reativação.')
+  const e = db.empresas.find((x) => x.id === id && !x.ativa)
+  if (!e) throw new Error('Empresa não encontrada ou com vínculo já ativo.')
+  e.ativa = true
+  e.encerrada_em = null
+  registrar(db, null, uid, 'empresa_reativada', { empresa_id: id, nome: e.nome, slug: e.slug, motivo: motivo.trim() })
+  gravar(db)
+}
+
+export async function historicoEmpresas() {
+  const db = ler()
+  exigirAdmin(db)
+  return db.historico.filter((h) => !h.denuncia_id && ['empresa_insert', 'empresa_update', 'empresa_encerrada', 'empresa_reativada'].includes(h.acao)).sort((a, b) => b.id - a.id)
 }
 
 /* ======================================================== SÓ NA DEMONSTRAÇÃO */
