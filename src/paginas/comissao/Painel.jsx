@@ -6,6 +6,7 @@ import { api, modoDemo } from '../../lib/api'
 import { mensagemDeErro } from '../../lib/formato'
 import { useInatividade } from '../../lib/ganchos'
 import { ContextoComissao } from '../../lib/contextoComissao'
+import { enderecoDoSite, foraDoEnderecoOficial } from '../../lib/contextoEmpresa'
 import Lista from './Lista'
 import Detalhe from './Detalhe'
 import Indicadores from './Indicadores'
@@ -61,6 +62,13 @@ export default function Painel() {
   return (
     <ContextoComissao.Provider value={valor}>
       <Pagina comissao larga>
+        {foraDoEnderecoOficial() && (
+          <div className="aviso aviso-alerta nao-imprimir" style={{ marginBottom: 16 }}>
+            <strong>Endereço de teste da Vercel.</strong> Este painel foi aberto por {window.location.host}, que pede
+            login na Vercel para quem não é da conta. Os links e cartazes das empresas saem sempre com o endereço
+            oficial, mas prefira usar <a href={`${enderecoDoSite()}/#/comissao`}>{enderecoDoSite().replace(/^https?:\/\//, '')}</a>.
+          </div>
+        )}
         <div className="painel-cabeca nao-imprimir">
           <div>
             <p className="fraco" style={{ margin: 0 }}>Conectado como</p>

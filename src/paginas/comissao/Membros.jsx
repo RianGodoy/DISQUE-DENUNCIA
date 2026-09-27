@@ -5,6 +5,7 @@ import { api, modoDemo } from '../../lib/api'
 import { data, mensagemDeErro } from '../../lib/formato'
 import { useTitulo } from '../../lib/ganchos'
 import { useComissao } from '../../lib/contextoComissao'
+import { enderecoDoSite } from '../../lib/contextoEmpresa'
 
 export default function Membros() {
   useTitulo('Membros da comissão')
@@ -233,7 +234,7 @@ function AvisosEmail() {
         <div className="botoes">
           <input id="site-url" type="text" placeholder="https://denuncia.suaempresa.com.br" value={site} onChange={(e) => setSite(e.target.value)} style={{ flex: '1 1 280px' }} />
           <button className="btn btn-secundario" disabled={site === dados.siteUrl}>Salvar</button>
-          {!dados.siteUrl && <button type="button" className="btn btn-fantasma btn-pequeno" onClick={() => setSite(window.location.origin)}>Usar {window.location.host}</button>}
+          {!dados.siteUrl && <button type="button" className="btn btn-fantasma btn-pequeno" onClick={() => setSite(enderecoDoSite())}>Usar {enderecoDoSite().replace(/^https?:\/\//, '')}</button>}
         </div>
       </form>
     </div>

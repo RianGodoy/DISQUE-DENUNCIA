@@ -8,7 +8,7 @@ import { api, entregarAcesso } from '../lib/api'
 import { formatarProtocolo, formatarSenha, gerarCodigo } from '../lib/codigos'
 import { ACONTECENDO, FREQUENCIAS, JA_RELATOU, VINCULOS, data, mensagemDeErro, paraInputData } from '../lib/formato'
 import { useAvisoAoSair, useCopiar, useTitulo } from '../lib/ganchos'
-import { useBase, useEmpresa } from '../lib/contextoEmpresa'
+import { enderecoDoSite, useBase, useEmpresa } from '../lib/contextoEmpresa'
 
 const ETAPAS = ['Assunto', 'Onde e quando', 'O que aconteceu', 'Sigilo', 'Revisar e enviar']
 
@@ -376,7 +376,7 @@ function Confirmacao({ protocolo, senha, falhas, qtd, urgente }) {
   useAvisoAoSair(!anotei)
   const p = formatarProtocolo(protocolo)
   const s = formatarSenha(senha)
-  const texto = `Canal de Denúncias — ${daEmpresa.nome}\nProtocolo: ${p}\nSenha: ${s}\n\nAcompanhe em: ${window.location.origin}${window.location.pathname}#${base}/acompanhar\nGuarde em local seguro. A senha não pode ser recuperada.\n`
+  const texto = `Canal de Denúncias — ${daEmpresa.nome}\nProtocolo: ${p}\nSenha: ${s}\n\nAcompanhe em: ${enderecoDoSite()}/#${base}/acompanhar\nGuarde em local seguro. A senha não pode ser recuperada.\n`
 
   function baixar() {
     const url = URL.createObjectURL(new Blob([texto], { type: 'text/plain;charset=utf-8' }))

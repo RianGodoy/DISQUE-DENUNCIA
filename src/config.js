@@ -13,6 +13,15 @@
    o script scripts/conferir-categorias.mjs acusa se ficarem diferentes.
    ========================================================================== */
 
+/* Endereço OFICIAL do canal, o que vai nos links das empresas, nos cartazes e
+   nos QR codes. Fica fixo aqui porque o painel pode estar aberto por outro
+   endereço — cada publicação na Vercel tem também um endereço de teste
+   (disque-denuncia-abc123-….vercel.app) que PEDE LOGIN NA VERCEL. Um link
+   gerado a partir dele não abre para o trabalhador. Deixe vazio ('') para usar
+   o endereço aberto no navegador (só serve para testes). Mudou de domínio?
+   Troque aqui e reimprima os cartazes. */
+export const siteOficial = 'https://disque-denuncia.vercel.app'
+
 export const empresa = {
   nome: 'Empresa Exemplo Ltda.',
   nomeCurto: 'Empresa Exemplo',
