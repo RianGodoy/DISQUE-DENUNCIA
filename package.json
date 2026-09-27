@@ -1,0 +1,26 @@
+{
+  "name": "canal-denuncia",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Canal de denúncias anônimo — assédio, violência, riscos psicossociais e riscos ocupacionais (NR-01 / Lei 14.457/2022)",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "testar": "node scripts/dividir-schema.mjs && node scripts/conferir-categorias.mjs && node scripts/testar-schema.mjs",
+    "dividir-sql": "node scripts/dividir-schema.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.112.3",
+    "qrcode": "^1.5.4",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.28.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^5.4.11"
+  }
+}

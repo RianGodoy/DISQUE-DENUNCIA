@@ -1,0 +1,73 @@
+﻿CANAL DE DENÚNCIAS — COMO PUBLICAR NA VERCEL
+=============================================
+
+O que precisa no computador que vai publicar
+--------------------------------------------
+- Internet.
+- Node.js instalado (https://nodejs.org, versão LTS). Para conferir, abra o
+  Prompt de Comando e digite:  node -v
+- A conta da Vercel (e-mail e senha), para entrar na primeira vez.
+
+
+Publicar
+--------
+1. Copie a pasta "canal-denuncia" do pendrive para o computador (Área de
+   Trabalho, por exemplo). Dá para rodar direto do pendrive, mas copiando é
+   mais rápido.
+
+2. Dê dois cliques em  publicar.bat
+
+3. NA PRIMEIRA VEZ o navegador abre para entrar na Vercel. Depois o programa
+   faz algumas perguntas no terminal. Responda assim:
+
+   Set up and deploy "...canal-denuncia"?        ->  Y  (Enter)
+   Which scope should contain your project?      ->  escolha a sua conta/time
+   Link to existing project?                      ->  N  (Enter)
+   What's your project's name?                    ->  canal-denuncia  (Enter)
+   In which directory is your code located?       ->  ./  (só Enter)
+   Want to modify these settings?                 ->  N  (Enter)
+
+   Se aparecer alguma pergunta diferente, o padrão (só Enter) serve.
+
+4. Espere. No fim aparece uma linha assim:
+
+   Production: https://canal-denuncia-xxxxx.vercel.app
+
+   ESSE é o endereço do canal. Anote.
+
+   Da segunda vez em diante (para atualizar o site), é só dar dois cliques em
+   publicar.bat de novo: ele não pergunta mais nada.
+
+
+Depois de publicar (uma vez só)
+-------------------------------
+1. Abra  https://SEU-ENDERECO/#/comissao  e entre com o e-mail e a senha do
+   Tiago.
+
+2. Aba "Membros" > "Aviso de denúncia nova por e-mail" > "Endereço do site":
+   cole o endereço (https://canal-denuncia-xxxxx.vercel.app) e salve. É ele
+   que vai no botão "Abrir o painel" do e-mail.
+
+3. Aba "Empresas" > "+ Nova empresa": cadastre cada empresa. Cada uma ganha um
+   link próprio e um "Cartaz com QR code" para imprimir.
+
+4. No Supabase (SQL Editor), rode supabase/conferir-instalacao.sql: todos os
+   itens devem ficar com ✔ — o da chave do Resend só depois de cadastrá-la
+   (README.md, seção "Aviso por e-mail").
+
+
+Se der erro
+-----------
+- "Build na Vercel SEM banco": o arquivo .env.production não foi junto.
+  Ele fica dentro da pasta canal-denuncia (pode estar oculto no Windows:
+  Exibir > Itens ocultos). Sem ele o site não é publicado de propósito — seria
+  um canal que não entrega denúncia a ninguém.
+- "command not found" / "node não é reconhecido": instale o Node.js.
+- Qualquer outro: copie a mensagem do terminal e mande para análise.
+
+
+Domínio próprio (opcional)
+--------------------------
+Na Vercel: projeto canal-denuncia > Settings > Domains. Um endereço como
+denuncia.suaempresa.com.br passa mais confiança ao trabalhador. Depois de
+trocar, atualize o "Endereço do site" no painel e reimprima os cartazes.
