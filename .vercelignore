@@ -1,8 +1,0 @@
-# O que NÃO sobe para a Vercel. Ela roda `npm install` e `npm run build` lá;
-# só precisa do código do site. (.env.local, node_modules e .git a Vercel já
-# ignora sozinha.)
-dist
-dist-demo
-scripts
-supabase
-*.log
